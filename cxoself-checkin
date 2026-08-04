@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>活動報到系統</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<style>
+:root{
+  --primary:#e07b39;--primary-light:#fdf0e8;
+  --grad-btn:linear-gradient(135deg,#f5a96a,#e07b39,#c4622a);
+  --grad-green:linear-gradient(135deg,#6fcf97,#27ae60,#1a8a47);
+  --grad-hero:linear-gradient(160deg,#f5a96a 0%,#e07b39 45%,#c4622a 100%);
+  --success:#1a8a47;--success-light:#eafaf1;
+  --danger:#c0392b;--danger-light:#fdecea;
+  --w50:#fff8f2;--w100:#fdeede;--w200:#fad5b0;--w600:#c4622a;--w700:#9e4b1e;--w800:#7a3614;
+  --g100:#f3f0eb;--g200:#e5e0d8;--g300:#d0c9be;--g400:#a89f93;--g500:#7d7368;--g600:#5c5349;--g700:#3e3730;--g800:#2a2320;
+  --radius:14px;--radius-lg:20px;
+  --shadow-lg:0 8px 48px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'PingFang TC','Noto Sans TC',sans-serif;background:#1a0a00;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:2rem 1rem 4rem;position:relative;overflow-y:auto;overflow-x:hidden}
+
+#bg-layer{position:fixed;inset:0;z-index:0}
+#bg-layer::before{content:'';position:absolute;inset:0;background:linear-gradient(160deg,#1a0a00 0%,#2d1200 50%,#1f0d00 100%)}
+#bg-layer::after{content:'';position:absolute;width:90vw;height:90vw;max-width:700px;max-height:700px;border-radius:50%;background:radial-gradient(circle,rgba(255,140,60,0.35) 0%,rgba(200,90,20,0.15) 45%,transparent 70%);top:-20%;left:-20%;animation:glowPulse 6s ease-in-out infinite alternate}
+.bg-glow2{position:fixed;width:70vw;height:70vw;max-width:550px;max-height:550px;border-radius:50%;background:radial-gradient(circle,rgba(140,50,0,0.35) 0%,rgba(80,25,0,0.15) 50%,transparent 70%);bottom:-15%;right:-15%;z-index:0;animation:glowPulse2 8s ease-in-out infinite alternate}
+#bg-overlay{position:fixed;inset:0;display:none;z-index:1}
+#loading-screen,#main-wrap,#success-screen{position:relative;z-index:2}
+@keyframes glowPulse{from{opacity:.6;transform:scale(1)}to{opacity:1;transform:scale(1.2)}}
+@keyframes glowPulse2{from{opacity:.4;transform:scale(1)}to{opacity:.85;transform:scale(1.25)}}
+@keyframes popIn{from{transform:scale(.3);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes slideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.card{background:rgba(255,255,255,.97);border-radius:var(--radius-lg);width:100%;max-width:420px;overflow:hidden;box-shadow:var(--shadow-lg)}
+
+/* HEADER */
+.card-header{background:var(--grad-hero);padding:1rem 1.5rem;display:flex;align-items:center;justify-content:space-between}
+.brand-main{font-size:1rem;font-weight:900;color:white;letter-spacing:.03em}
+.brand-sub{font-size:.7rem;color:rgba(255,255,255,.8);margin-top:1px}
+.system-label{font-size:.7rem;font-weight:700;color:white;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3);border-radius:100px;padding:.2rem .7rem;white-space:nowrap}
+.open-badge{font-size:.7rem;font-weight:700;color:white;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3);border-radius:100px;padding:.2rem .65rem}
+.event-name-strip{background:rgba(0,0,0,.15);padding:.5rem 1.5rem;border-bottom:1px solid rgba(255,255,255,.08)}
+.event-name-strip .en{font-size:.88rem;font-weight:800;color:white}
+
+.card-body{padding:1.25rem 1.5rem}
+
+/* EVENT INFO */
+.info-strip{background:var(--w50);border-radius:var(--radius);border:1px solid var(--w200);overflow:hidden;margin-bottom:1.1rem}
+.info-row{display:flex;align-items:flex-start;gap:.7rem;padding:.75rem 1rem;border-bottom:1px solid var(--w100)}
+.info-row:last-child{border-bottom:none}
+.info-icon{font-size:1rem;flex-shrink:0;width:20px;text-align:center;margin-top:.1rem}
+.info-label{font-size:.68rem;font-weight:800;color:var(--g400);letter-spacing:.04em;text-transform:uppercase;margin-bottom:.12rem}
+.info-val{font-size:.92rem;color:var(--g800);font-weight:600;line-height:1.5}
+.info-val a{color:var(--primary);text-decoration:none;font-weight:700;border-bottom:1px solid var(--w200)}
+.notice-text{font-size:.88rem;color:var(--g600);line-height:1.75}
+.notice-text a{color:var(--primary);font-weight:700;text-decoration:none}
+
+/* QUERY FORM */
+.query-box{background:var(--grad-hero);border-radius:var(--radius);padding:1.1rem 1.25rem;margin-bottom:.5rem}
+.query-title{font-size:.82rem;font-weight:800;color:white;margin-bottom:.75rem}
+.form-group{margin-bottom:.65rem}
+.form-label{display:block;font-size:.74rem;font-weight:700;color:rgba(255,255,255,.85);margin-bottom:.3rem}
+.form-input{width:100%;padding:.72rem 1rem;border:none;border-radius:10px;font-size:.95rem;outline:none;background:white;color:var(--g800);-webkit-appearance:none}
+.form-input::placeholder{color:var(--g300)}
+.form-input.error{box-shadow:0 0 0 2.5px var(--danger)}
+.btn-query{width:100%;padding:.82rem;border:none;border-radius:10px;font-size:.92rem;font-weight:800;cursor:pointer;background:rgba(255,255,255,.22);color:white;border:1.5px solid rgba(255,255,255,.4);transition:background .15s;margin-top:.25rem;letter-spacing:.02em}
+.btn-query:hover{background:rgba(255,255,255,.32)}
+.btn-query:active{transform:scale(.97)}
+.error-box{font-size:.8rem;color:var(--danger);font-weight:600;background:var(--danger-light);border:1px solid #fca5a5;border-radius:10px;padding:.65rem 1rem;margin-bottom:.75rem;display:none;line-height:1.6}
+.error-box.show{display:block}
+.lock-warn{font-size:.8rem;color:var(--danger);font-weight:600;text-align:center;background:var(--danger-light);border:1px solid #fca5a5;border-radius:10px;padding:.65rem 1rem;margin-bottom:.75rem;display:none}
+.lock-warn.show{display:block}
+.attempt-hint{font-size:.72rem;color:var(--g400);text-align:center;margin-top:.4rem}
+
+/* RESULT CARD */
+.result-card{background:var(--w50);border:1.5px solid var(--w200);border-radius:var(--radius);padding:1.1rem 1.25rem;margin-bottom:1rem}
+.result-name{font-size:1.5rem;font-weight:900;color:var(--w800);text-align:center;padding:.5rem 0;margin-bottom:.6rem;letter-spacing:-.3px}
+.result-num-box{background:white;border:1.5px solid var(--w200);border-radius:10px;padding:.6rem 1rem;margin-bottom:.6rem;text-align:center}
+.result-num-label{font-size:.65rem;font-weight:800;color:var(--g400);letter-spacing:.06em;text-transform:uppercase;margin-bottom:.2rem}
+.result-num{font-size:2.2rem;font-weight:900;color:var(--w800);line-height:1;letter-spacing:.05em}
+.result-badges{display:flex;flex-wrap:wrap;gap:.4rem;justify-content:center;margin-bottom:.5rem}
+.badge{display:inline-flex;align-items:center;gap:.3rem;padding:.25rem .65rem;border-radius:8px;font-size:.78rem;font-weight:700}
+.badge-role{background:#e8f0fe;color:#1a56db}
+.badge-group{background:var(--w100);color:var(--w700)}
+.badge-food-meat{background:#fef2f2;color:#991b1b}
+.badge-food-veg{background:#f0fdf4;color:#166534}
+.badge-done{background:var(--success-light);color:var(--success)}
+
+/* STATUS BOXES */
+.status-box{border-radius:var(--radius);padding:.9rem 1.1rem;margin-bottom:.75rem;text-align:center}
+.status-box.before{background:var(--w50);border:1.5px solid var(--w200)}
+.status-box.open{background:var(--success-light);border:1.5px solid #86efac}
+.status-box.done-status{background:var(--success-light);border:1.5px solid #86efac}
+.status-icon{font-size:1.5rem;margin-bottom:.3rem}
+.status-title{font-size:.88rem;font-weight:800;margin-bottom:.2rem}
+.status-box.before .status-title{color:var(--w700)}
+.status-box.open .status-title{color:var(--success)}
+.status-box.done-status .status-title{color:var(--success)}
+.status-sub{font-size:.75rem;color:var(--g400);line-height:1.6}
+.mini-countdown{font-size:1.3rem;font-weight:900;color:var(--primary);letter-spacing:.05em;margin:.4rem 0 .1rem}
+.mini-countdown-label{font-size:.68rem;color:var(--g400)}
+
+/* BUTTONS */
+.btn-confirm{width:100%;padding:.88rem;border:none;border-radius:var(--radius);font-size:.95rem;font-weight:800;cursor:pointer;background:var(--grad-green);color:white;box-shadow:0 4px 16px rgba(27,138,71,.3);margin-bottom:.5rem;transition:opacity .15s,transform .1s}
+.btn-confirm:hover{opacity:.9}
+.btn-confirm:active{transform:scale(.97)}
+.btn-confirm:disabled{background:var(--g200);color:var(--g400);box-shadow:none;cursor:not-allowed}
+.btn-back{width:100%;padding:.75rem;border:none;border-radius:var(--radius);font-size:.85rem;font-weight:600;cursor:pointer;background:var(--g100);color:var(--g500)}
+.btn-screenshot{width:100%;padding:.75rem;border:1.5px solid var(--w200);border-radius:var(--radius);font-size:.82rem;font-weight:700;cursor:pointer;background:var(--w50);color:var(--w700);margin-bottom:.5rem}
+
+/* SCREENSHOT HINT */
+.screenshot-hint{background:linear-gradient(135deg,#fef9ec,#fef3c7);border:1.5px solid #fcd34d;border-radius:var(--radius);padding:.85rem 1rem;text-align:center;margin-bottom:.75rem}
+.sh-icon{font-size:1.3rem;margin-bottom:.25rem}
+.sh-title{font-size:.82rem;font-weight:800;color:#92400e;margin-bottom:.2rem}
+.sh-desc{font-size:.73rem;color:#b45309;line-height:1.6}
+
+/* CLOSED */
+.closed-wrap{text-align:center;padding:1.5rem 0}
+.closed-icon{font-size:3rem;margin-bottom:.75rem}
+.closed-title{font-size:1.1rem;font-weight:800;color:var(--g700);margin-bottom:.4rem}
+.closed-sub{font-size:.85rem;color:var(--g400);line-height:1.6}
+
+/* WAITING extra */
+.countdown-box{background:var(--w50);border:1.5px solid var(--w200);border-radius:var(--radius);padding:1rem;margin:.75rem 0}
+.countdown-label{font-size:.7rem;color:var(--g400);font-weight:700;letter-spacing:.05em;margin-bottom:.35rem}
+.countdown-time{font-size:2rem;font-weight:900;color:var(--primary);letter-spacing:.05em}
+.time-range{font-size:.75rem;color:var(--g400);margin-top:.25rem}
+
+/* SUCCESS SCREEN */
+#success-screen{position:fixed;inset:0;overflow-y:auto;background:linear-gradient(160deg,#1a0a00,#2d1200)}
+.success-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem 1rem}
+.success-card{background:white;border-radius:var(--radius-lg);width:100%;max-width:360px;overflow:hidden;box-shadow:var(--shadow-lg)}
+.success-top{background:var(--grad-hero);padding:1.5rem;text-align:center;color:white}
+.success-brand{font-size:.82rem;font-weight:700;opacity:.82;margin-bottom:.5rem;letter-spacing:.05em}
+.success-icon{font-size:3rem;animation:popIn .4s cubic-bezier(.34,1.56,.64,1)}
+.success-name{font-size:1.8rem;font-weight:900;letter-spacing:-.5px;animation:slideUp .35s ease .1s both;margin-top:.3rem}
+.success-label{font-size:.82rem;opacity:.8;margin-top:.2rem;animation:slideUp .35s ease .15s both}
+.method-badge{display:inline-flex;align-items:center;gap:.3rem;background:rgba(255,255,255,.2);color:white;border:1px solid rgba(255,255,255,.35);border-radius:100px;padding:.2rem .65rem;font-size:.7rem;font-weight:700;margin-top:.5rem}
+.success-body{padding:1.4rem}
+.big-num-box{background:linear-gradient(135deg,var(--w50),var(--w100));border:2px solid var(--w200);border-radius:var(--radius);padding:1rem 1.25rem;margin-bottom:1rem;text-align:center}
+.big-num-label{font-size:.68rem;font-weight:800;color:var(--g400);letter-spacing:.06em;text-transform:uppercase;margin-bottom:.2rem}
+.big-num{font-size:3.5rem;font-weight:900;color:var(--w800);line-height:1;letter-spacing:.05em}
+.s-info{background:var(--w50);border-radius:var(--radius);padding:.9rem 1.1rem;margin-bottom:1rem;border:1px solid var(--w100)}
+.s-row{display:flex;align-items:center;justify-content:space-between;padding:.3rem 0}
+.s-row+.s-row{border-top:1px solid var(--w100)}
+.s-label{font-size:.72rem;color:var(--g400);font-weight:600}
+.s-val{font-size:.85rem;font-weight:700;color:var(--g900)}
+.s-screenshot{background:linear-gradient(135deg,#fef9ec,#fef3c7);border:1.5px solid #fcd34d;border-radius:var(--radius);padding:.9rem 1.1rem;text-align:center}
+
+#loading-screen{position:fixed;inset:0;background:linear-gradient(160deg,#1a0a00,#2d1200);display:flex;flex-direction:column;align-items:center;justify-content:center;color:white;z-index:999}
+.spinner{width:32px;height:32px;border:3px solid rgba(255,255,255,.25);border-top-color:white;border-radius:50%;animation:spin .8s linear infinite;margin:1.25rem auto 0}
+.footer-note{color:rgba(255,255,255,.4);font-size:.72rem;text-align:center;margin-top:1.25rem;max-width:420px;width:100%}
+</style>
+</head>
+<body>
+<div id="bg-layer"></div>
+<div class="bg-glow2"></div>
+<div id="bg-overlay"></div>
+
+<div id="loading-screen">
+  <div style="font-size:3rem;margin-bottom:1rem">📋</div>
+  <h2 style="font-size:1.1rem;font-weight:800;margin-bottom:.3rem">活動報到系統</h2>
+  <p style="font-size:.82rem;opacity:.75">正在連線，請稍候⋯</p>
+  <div class="spinner"></div>
+</div>
+
+<div id="main-wrap" style="display:none;width:100%;flex-direction:column;align-items:center">
+
+  <!-- MAIN CARD -->
+  <div class="card" id="card-main">
+    <div class="card-header">
+      <div>
+        <div class="brand-main">商戰 C X O</div>
+        <div class="brand-sub" id="header-event-name">活動報到</div>
+      </div>
+      <div class="system-label" id="header-badge">報到系統</div>
+    </div>
+
+    <div class="card-body">
+      <!-- EVENT INFO -->
+      <div class="info-strip" id="info-strip" style="display:none">
+        <div class="info-row" id="row-dt" style="display:none">
+          <div class="info-icon">🗓</div>
+          <div><div class="info-label">活動時間</div><div class="info-val" id="val-dt"></div></div>
+        </div>
+        <div class="info-row" id="row-addr" style="display:none">
+          <div class="info-icon">📍</div>
+          <div><div class="info-label">活動地點</div><div class="info-val" id="val-addr"></div></div>
+        </div>
+        <div class="info-row" id="row-note" style="display:none">
+          <div class="info-icon">📋</div>
+          <div><div class="info-label">注意事項</div><div class="notice-text" id="val-note"></div></div>
+        </div>
+      </div>
+
+      <!-- CLOSED STATE -->
+      <div id="view-closed" style="display:none">
+        <div class="closed-wrap">
+          <div class="closed-icon">🔒</div>
+          <div class="closed-title">報到已結束</div>
+          <div class="closed-sub">感謝您的參與！<br>如有任何問題，請洽現場工作人員</div>
+        </div>
+      </div>
+
+      <!-- QUERY FORM -->
+      <div id="view-query" style="display:none">
+        <div class="lock-warn" id="lock-warn"></div>
+        <div class="query-box">
+          <div class="query-title">🔍 查詢您的報到資料</div>
+          <div class="form-group">
+            <label class="form-label">電話後 4 碼</label>
+            <input class="form-input" id="input-phone4" type="text" inputmode="numeric" placeholder="請輸入電話後 4 碼" maxlength="4" autocomplete="off">
+          </div>
+          <div class="form-group" style="margin-bottom:.5rem">
+            <label class="form-label">完整中文姓名</label>
+            <input class="form-input" id="input-name" type="text" placeholder="請輸入您的完整姓名" autocomplete="off">
+          </div>
+          <button class="btn-query" onclick="doSearch()">查詢</button>
+        </div>
+        <div class="error-box" id="error-box"></div>
+        <div class="attempt-hint" id="attempt-hint"></div>
+      </div>
+
+      <!-- RESULT: BEFORE CHECKIN TIME -->
+      <div id="view-result-before" style="display:none">
+        <div class="result-card">
+          <div class="result-name" id="rb-name"></div>
+          <div class="result-num-box">
+            <div class="result-num-label">您的報到編號</div>
+            <div class="result-num" id="rb-num"></div>
+          </div>
+          <div class="result-badges" id="rb-badges"></div>
+        </div>
+        <div class="status-box before">
+          <div class="status-icon">⏰</div>
+          <div class="status-title" id="rb-status-title">報到尚未開始</div>
+          <div class="mini-countdown" id="rb-countdown">--:--:--</div>
+          <div class="mini-countdown-label" id="rb-time-range"></div>
+          <div style="margin-top:.6rem;padding:.6rem .85rem;background:rgba(224,123,57,.1);border-radius:8px;border-left:3px solid var(--primary)">
+            <div style="font-size:.8rem;font-weight:700;color:var(--primary-dark);line-height:1.7">
+              報到將於上方時間開放，屆時回到此頁面即可完成自助報到<br>
+              完成後請截圖出示給工作人員 📸
+            </div>
+          </div>
+        </div>
+        <div class="screenshot-hint">
+          <div class="sh-icon">📸</div>
+          <div class="sh-title">建議現在截圖保存</div>
+          <div class="sh-desc">截圖儲存您的編號，活動當天出示給工作人員，入場更快速！</div>
+        </div>
+        <button class="btn-back" onclick="backToQuery()">← 返回查詢</button>
+      </div>
+
+      <!-- RESULT: OPEN - CONFIRM CHECKIN -->
+      <div id="view-result-open" style="display:none">
+        <div class="result-card">
+          <div class="result-name" id="ro-name"></div>
+          <div class="result-num-box">
+            <div class="result-num-label">您的報到編號</div>
+            <div class="result-num" id="ro-num"></div>
+          </div>
+          <div class="result-badges" id="ro-badges"></div>
+        </div>
+        <div class="status-box open">
+          <div class="status-icon">🟢</div>
+          <div class="status-title">報到開放中，請確認資料後報到</div>
+        </div>
+        <button class="btn-confirm" onclick="doCheckin()">✓ 確認資料正確，完成報到</button>
+        <button class="btn-back" onclick="backToQuery()">← 返回重新查詢</button>
+      </div>
+
+      <!-- RESULT: ALREADY DONE -->
+      <div id="view-result-done" style="display:none">
+        <div class="result-card">
+          <div class="result-name" id="rd-name"></div>
+          <div class="result-num-box">
+            <div class="result-num-label">您的報到編號</div>
+            <div class="result-num" id="rd-num"></div>
+          </div>
+          <div class="result-badges" id="rd-badges"></div>
+        </div>
+        <div class="status-box done-status">
+          <div class="status-icon">✅</div>
+          <div class="status-title">您已完成報到</div>
+          <div class="status-sub" id="rd-time"></div>
+        </div>
+        <button class="btn-back" onclick="backToQuery()">← 返回查詢</button>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="footer-note">如有問題，請洽現場工作人員</div>
+</div>
+
+<!-- SUCCESS SCREEN -->
+<div id="success-screen" style="display:none">
+  <div class="success-wrap">
+    <div class="success-card">
+      <div class="success-top">
+        <div class="success-brand">商戰 C X O ｜ 報到系統</div>
+        <div class="success-icon">✅</div>
+        <div class="success-name" id="s-name"></div>
+        <div class="success-label">報到成功！</div>
+        <div class="method-badge">📱 自助報到</div>
+      </div>
+      <div class="success-body">
+        <div class="big-num-box">
+          <div class="big-num-label">報到編號</div>
+          <div class="big-num" id="s-num"></div>
+        </div>
+        <div class="s-info">
+          <div class="s-row"><span class="s-label">活動名稱</span><span class="s-val" id="s-event"></span></div>
+          <div class="s-row"><span class="s-label">報到時間</span><span class="s-val" id="s-time"></span></div>
+          <div class="s-row" id="s-row-role" style="display:none"><span class="s-label">身分</span><span class="s-val" id="s-role"></span></div>
+          <div class="s-row" id="s-row-group" style="display:none"><span class="s-label">分組</span><span class="s-val" id="s-group"></span></div>
+          <div class="s-row" id="s-row-food" style="display:none"><span class="s-label">餐飲</span><span class="s-val" id="s-food"></span></div>
+        </div>
+        <div class="s-screenshot">
+          <div style="font-size:1.4rem;margin-bottom:.3rem">📸</div>
+          <div style="font-size:.85rem;font-weight:800;color:#92400e;margin-bottom:.2rem">請截圖保存此畫面</div>
+          <div style="font-size:.75rem;color:#b45309;line-height:1.6">入場時請出示此截圖給工作人員，工作人員會依編號找到您的資料，謝謝配合！</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var FB_CONFIG = {
+  apiKey: "AIzaSyBldx57mnQHm8ykNaQVROJrxcBlr1gqsj0",
+  authDomain: "cxo20260606.firebaseapp.com",
+  databaseURL: "https://cxo20260606-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "cxo20260606",
+  storageBucket: "cxo20260606.firebasestorage.app",
+  messagingSenderId: "1081032555563",
+  appId: "1:1081032555563:web:0822ab16f2755932803e6e"
+};
+
+var db = null, attendees = {}, config = {};
+var selectedKey = null, selectedData = null;
+var failCount = 0, lockUntil = 0;
+var miniCountdownTimer = null;
+
+// ── INIT ──
+window.addEventListener('load', function() {
+  firebase.initializeApp(FB_CONFIG);
+  db = firebase.database();
+  // Security: do NOT preload all attendees
+  // We only query individual records when user submits search
+  db.ref('config').once('value').then(function(snap) {
+    config = snap.val() || {};
+    applyBg();
+    renderEventInfo();
+    document.getElementById('loading-screen').style.display = 'none';
+    document.getElementById('main-wrap').style.display = 'flex';
+    initView();
+  });
+});
+
+function applyBg() {
+  var bgUrl = (config.bgImageUrl || '').trim();
+  if (!bgUrl) return;
+  var dm = bgUrl.match(/file\/d\/([^/?]+)/);
+  if (dm) bgUrl = 'https://drive.google.com/uc?export=view&id=' + dm[1];
+  var bl = document.getElementById('bg-layer');
+  bl.style.backgroundImage = 'url(' + bgUrl + ')';
+  bl.style.backgroundSize = 'cover';
+  bl.style.backgroundPosition = 'center';
+  bl.style.filter = 'blur(2px) brightness(0.7)';
+  bl.style.transform = 'scale(1.05)';
+  var bo = document.getElementById('bg-overlay');
+  bo.style.display = 'block';
+  bo.style.background = 'rgba(0,0,0,0.5)';
+}
+
+function renderEventInfo() {
+  var dt = config.eventDateTime || '';
+  var addr = config.eventAddress || '';
+  var addrUrl = config.eventAddressUrl || '';
+  var notice = config.eventNotice || '';
+  var hasAny = dt || addr || notice;
+  document.getElementById('info-strip').style.display = hasAny ? 'block' : 'none';
+
+  var rDt = document.getElementById('row-dt'), vDt = document.getElementById('val-dt');
+  if (dt) { rDt.style.display = 'flex'; vDt.textContent = dt; } else rDt.style.display = 'none';
+
+  var rAddr = document.getElementById('row-addr'), vAddr = document.getElementById('val-addr');
+  if (addr) {
+    rAddr.style.display = 'flex';
+    vAddr.innerHTML = addrUrl ? '<a href="' + addrUrl + '" target="_blank" rel="noopener">' + addr + ' ↗</a>' : addr;
+  } else rAddr.style.display = 'none';
+
+  var rNote = document.getElementById('row-note'), vNote = document.getElementById('val-note');
+  if (notice) {
+    rNote.style.display = 'flex';
+    vNote.innerHTML = notice.replace(/\\n/g, '<br>').replace(/\n/g, '<br>');
+    vNote.querySelectorAll('a').forEach(function(a) { a.target = '_blank'; a.rel = 'noopener'; });
+  } else rNote.style.display = 'none';
+}
+
+// ── TIME HELPERS ──
+function getTimeStatus() {
+  var now = new Date();
+  var start = config.checkinStart || '00:00';
+  var end = config.checkinEnd || '23:59';
+  var checkinDate = config.checkinDate || '';
+  var sp = start.split(':'), ep = end.split(':');
+  var sh = parseInt(sp[0]), sm = parseInt(sp[1]);
+  var startMin = sh * 60 + sm;
+  var endMin = parseInt(ep[0]) * 60 + parseInt(ep[1]);
+  var nowMin = now.getHours() * 60 + now.getMinutes();
+  var y = now.getFullYear(), mo = String(now.getMonth()+1).padStart(2,'0'), d = String(now.getDate()).padStart(2,'0');
+  var todayStr = y + '-' + mo + '-' + d;
+
+  if (checkinDate && todayStr > checkinDate) return {status: 'closed'};
+  if (checkinDate && todayStr < checkinDate) return {status: 'before', sh: sh, sm: sm, dateStr: checkinDate, start: start, end: end};
+  if (nowMin >= startMin && nowMin < endMin) return {status: 'open'};
+  if (nowMin < startMin) return {status: 'before', sh: sh, sm: sm, dateStr: null, start: start, end: end};
+  return {status: 'closed'};
+}
+
+function initView() {
+  var ts = getTimeStatus();
+  var eventName = config.eventName || '活動報到';
+  document.getElementById('header-event-name').textContent = eventName;
+
+  if (ts.status === 'closed') {
+    showView('closed');
+    document.getElementById('header-badge').textContent = '報到已結束';
+  } else {
+    showView('query');
+    document.getElementById('header-badge').textContent = ts.status === 'open' ? '🟢 報到開放中' : '報到系統';
+  }
+}
+
+// ── VIEWS ──
+function showView(name) {
+  var views = ['closed', 'query', 'result-before', 'result-open', 'result-done'];
+  views.forEach(function(v) {
+    document.getElementById('view-' + v).style.display = v === name ? 'block' : 'none';
+  });
+}
+
+function backToQuery() {
+  if (miniCountdownTimer) { clearInterval(miniCountdownTimer); miniCountdownTimer = null; }
+  selectedKey = null; selectedData = null;
+  document.getElementById('input-phone4').value = '';
+  document.getElementById('input-name').value = '';
+  document.getElementById('input-phone4').classList.remove('error');
+  document.getElementById('input-name').classList.remove('error');
+  document.getElementById('error-box').classList.remove('show');
+  initView();
+}
+
+// ── SEARCH ──
+function isLocked() {
+  if (Date.now() < lockUntil) {
+    var rem = Math.ceil((lockUntil - Date.now()) / 1000);
+    var m = Math.floor(rem/60), s = rem % 60;
+    document.getElementById('lock-warn').textContent = '⚠️ 嘗試次數過多，請於 ' + m + ':' + String(s).padStart(2,'0') + ' 後再試';
+    document.getElementById('lock-warn').classList.add('show');
+    return true;
+  }
+  document.getElementById('lock-warn').classList.remove('show');
+  return false;
+}
+
+function recordFail() {
+  failCount++;
+  if (failCount >= 5) {
+    lockUntil = Date.now() + 3*60*1000;
+    failCount = 0;
+    document.getElementById('attempt-hint').textContent = '';
+  } else {
+    document.getElementById('attempt-hint').textContent = '還有 ' + (5-failCount) + ' 次機會，超過將鎖定 3 分鐘';
+  }
+}
+
+function doSearch() {
+  if (isLocked()) return;
+  var phone4 = document.getElementById('input-phone4').value.trim();
+  var name = document.getElementById('input-name').value.trim();
+  var errEl = document.getElementById('error-box');
+  errEl.classList.remove('show');
+  document.getElementById('input-phone4').classList.remove('error');
+  document.getElementById('input-name').classList.remove('error');
+
+  if (!phone4 || !name) {
+    if (!phone4) document.getElementById('input-phone4').classList.add('error');
+    if (!name) document.getElementById('input-name').classList.add('error');
+    errEl.textContent = '請填寫電話後4碼與完整姓名';
+    errEl.classList.add('show');
+    return;
+  }
+
+  // Security: query only by phone last 4 digits, never load all attendees
+  var btn = document.querySelector('.btn-query');
+  if (btn) { btn.textContent = '查詢中⋯'; btn.disabled = true; }
+
+  db.ref('attendees').orderByChild('phone').once('value').then(function(snap) {
+    var found = null;
+    snap.forEach(function(child) {
+      var a = child.val();
+      var p = (a.phone || '').replace(/-/g, '').replace(/\s/g, '');
+      if (p.slice(-4) === phone4 && a.name === name) {
+        found = { key: child.key, data: a };
+        return true; // stop iteration
+      }
+    });
+
+    if (btn) { btn.textContent = '查詢'; btn.disabled = false; }
+
+    if (!found) {
+      errEl.innerHTML = '找不到符合的資料，請確認：<br>・電話後4碼是否正確<br>・姓名是否與報名時填寫的完全一致<br>如有疑問請洽現場工作人員';
+      errEl.classList.add('show');
+      document.getElementById('input-phone4').classList.add('error');
+      document.getElementById('input-name').classList.add('error');
+      recordFail();
+      return;
+    }
+
+    selectedKey = found.key;
+    selectedData = found.data;
+    showResult();
+  }).catch(function() {
+    if (btn) { btn.textContent = '查詢'; btn.disabled = false; }
+    errEl.textContent = '查詢失敗，請稍後再試或洽現場工作人員';
+    errEl.classList.add('show');
+  });
+}
+
+// ── SHOW RESULT ──
+function buildBadges(a) {
+  var html = '';
+  if (a.role) html += '<span class="badge badge-role">' + a.role + '</span>';
+  if (a.group) html += '<span class="badge badge-group">👥 ' + a.group + '</span>';
+  if (a.food === '素食') html += '<span class="badge badge-food-veg">🥦 素食</span>';
+  else if (a.food === '葷食') html += '<span class="badge badge-food-meat">🍖 葷食</span>';
+  return html;
+}
+
+function showResult() {
+  var a = selectedData;
+  var numId = String(a.numberId || '').padStart(3, '0');
+  var ts = getTimeStatus();
+  var badges = buildBadges(a);
+
+  if (a.checkedIn) {
+    document.getElementById('rd-name').textContent = a.name;
+    document.getElementById('rd-num').textContent = numId;
+    document.getElementById('rd-badges').innerHTML = badges;
+    document.getElementById('rd-time').textContent = '報到時間：' + formatTime(a.checkinTime);
+    showView('result-done');
+    return;
+  }
+
+  if (ts.status === 'open') {
+    document.getElementById('ro-name').textContent = a.name;
+    document.getElementById('ro-num').textContent = numId;
+    document.getElementById('ro-badges').innerHTML = badges;
+    showView('result-open');
+    return;
+  }
+
+  // Before / waiting state
+  document.getElementById('rb-name').textContent = a.name;
+  document.getElementById('rb-num').textContent = numId;
+  document.getElementById('rb-badges').innerHTML = badges;
+
+  if (ts.dateStr) {
+    var dp = ts.dateStr.split('-');
+    var roc = parseInt(dp[0]) - 1911;
+    document.getElementById('rb-status-title').textContent = '活動日期：民國' + roc + '年' + parseInt(dp[1]) + '月' + parseInt(dp[2]) + '日';
+    document.getElementById('rb-time-range').textContent = '報到時間：' + ts.start + ' ～ ' + ts.end;
+    startMiniCountdown(ts.dateStr, ts.sh, ts.sm);
+  } else {
+    document.getElementById('rb-status-title').textContent = '報到尚未開始';
+    document.getElementById('rb-time-range').textContent = '開放時間：' + ts.start + ' ～ ' + ts.end;
+    startMiniCountdownToday(ts.sh, ts.sm);
+  }
+  showView('result-before');
+}
+
+function startMiniCountdown(dateStr, sh, sm) {
+  if (miniCountdownTimer) clearInterval(miniCountdownTimer);
+  miniCountdownTimer = setInterval(function() {
+    var n = new Date(), parts = dateStr.split('-');
+    var target = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]), sh, sm, 0);
+    var diff = target - n;
+    if (diff <= 0) { clearInterval(miniCountdownTimer); showResult(); return; }
+    var days = Math.floor(diff/86400000);
+    var hh = String(Math.floor((diff%86400000)/3600000)).padStart(2,'0');
+    var mm = String(Math.floor((diff%3600000)/60000)).padStart(2,'0');
+    var ss = String(Math.floor((diff%60000)/1000)).padStart(2,'0');
+    var el = document.getElementById('rb-countdown');
+    if (el) el.textContent = days > 0 ? (days+'天 '+hh+':'+mm+':'+ss) : (hh+':'+mm+':'+ss);
+  }, 1000);
+}
+
+function startMiniCountdownToday(sh, sm) {
+  if (miniCountdownTimer) clearInterval(miniCountdownTimer);
+  miniCountdownTimer = setInterval(function() {
+    var n = new Date();
+    var target = new Date(n.getFullYear(), n.getMonth(), n.getDate(), sh, sm, 0);
+    var diff = target - n;
+    if (diff <= 0) { clearInterval(miniCountdownTimer); showResult(); return; }
+    var hh = String(Math.floor(diff/3600000)).padStart(2,'0');
+    var mm = String(Math.floor((diff%3600000)/60000)).padStart(2,'0');
+    var ss = String(Math.floor((diff%60000)/1000)).padStart(2,'0');
+    var el = document.getElementById('rb-countdown');
+    if (el) el.textContent = hh+':'+mm+':'+ss;
+  }, 1000);
+}
+
+// ── CHECKIN ──
+function doCheckin() {
+  if (!selectedKey) return;
+  var ts = getTimeStatus();
+  if (ts.status !== 'open') { alert('報到時間尚未開始，請等待開放後再試。'); return; }
+
+  var now = new Date();
+  var a = selectedData;
+  var numId = String(a.numberId || '').padStart(3, '0');
+  var eventName = config.eventName || '活動報到';
+
+  // Re-verify record is still not checked in before committing
+  db.ref('attendees/' + selectedKey).once('value').then(function(snap) {
+    var latest = snap.val();
+    if (!latest) { alert('查無此資料，請重新查詢。'); backToQuery(); return Promise.reject('no_data'); }
+    if (latest.checkedIn) {
+      alert('您已於 ' + formatTime(latest.checkinTime) + ' 完成報到，無需重複操作。');
+      backToQuery(); return Promise.reject('already_done');
+    }
+    return db.ref('attendees/' + selectedKey).update({
+      checkedIn: true,
+      checkinTime: now.toISOString(),
+      checkinMethod: 'self'
+    });
+  }).then(function() {
+    document.getElementById('s-name').textContent = a.name;
+    document.getElementById('s-num').textContent = numId;
+    document.getElementById('s-event').textContent = eventName;
+    document.getElementById('s-time').textContent = formatTime(now.toISOString());
+
+    var srRole = document.getElementById('s-row-role');
+    if (a.role) { srRole.style.display='flex'; document.getElementById('s-role').textContent = a.role; } else srRole.style.display='none';
+    var srGroup = document.getElementById('s-row-group');
+    if (a.group) { srGroup.style.display='flex'; document.getElementById('s-group').innerHTML='<span class="badge badge-group">👥 '+a.group+'</span>'; } else srGroup.style.display='none';
+    var srFood = document.getElementById('s-row-food');
+    if (a.food) {
+      srFood.style.display='flex';
+      var fc = a.food==='素食' ? 'badge-food-veg' : 'badge-food-meat';
+      var fe = a.food==='素食' ? '🥦 ' : '🍖 ';
+      document.getElementById('s-food').innerHTML='<span class="badge '+fc+'">'+fe+a.food+'</span>';
+    } else srFood.style.display='none';
+
+    document.getElementById('main-wrap').style.display = 'none';
+    document.getElementById('success-screen').style.display = 'block';
+  }).catch(function(err) {
+    if (err === 'no_data' || err === 'already_done') return;
+    console.error('Checkin error:', err);
+    alert('報到失敗，請洽現場工作人員');
+  });
+}
+
+// ── HELPERS ──
+function maskPhone(p) {
+  if (!p || p.length < 8) return p || '—';
+  return p.slice(0,3) + '****' + p.slice(7);
+}
+
+function formatTime(iso) {
+  if (!iso) return '';
+  var d = new Date(iso);
+  var roc = d.getFullYear() - 1911;
+  var mm = String(d.getMonth()+1).padStart(2,'0');
+  var dd = String(d.getDate()).padStart(2,'0');
+  var hh = String(d.getHours()).padStart(2,'0');
+  var mi = String(d.getMinutes()).padStart(2,'0');
+  var ss = String(d.getSeconds()).padStart(2,'0');
+  return '民國'+roc+'年'+mm+'月'+dd+'日 '+hh+':'+mi+':'+ss;
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    var vq = document.getElementById('view-query');
+    if (vq && vq.style.display !== 'none') doSearch();
+  }
+});
+</script>
+</body>
+</html>
